@@ -284,10 +284,7 @@ func (client Client) CreateRepository(projectKey, projectSlug string) (Repositor
 	req.SetBasicAuth(client.userName, client.password)
 
 	responseCode, data, err := client.consumeResponse(req)
-	if err != nil {
-		return Repository{}, err
-	}
-	if responseCode != http.StatusCreated {
+	if responseCode != http.StatusCreated && responseCode >= http.StatusBadRequest {
 		reason := "unknown reason"
 		switch {
 		case responseCode == http.StatusBadRequest:
@@ -300,6 +297,9 @@ func (client Client) CreateRepository(projectKey, projectSlug string) (Repositor
 			reason = "A repository with same name already exists."
 		}
 		return Repository{}, errorResponse{StatusCode: responseCode, Reason: reason}
+	}
+	if err != nil {
+		return Repository{}, err
 	}
 
 	var t Repository
