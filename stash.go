@@ -28,6 +28,7 @@ type (
 		CreateComment(projectKey, repositorySlug, pullRequest, text string) (Comment, error)
 		CreatePullRequest(projectKey, repositorySlug, title, description, fromRef, toRef string, reviewers []string) (PullRequest, error)
 		CreateRepository(projectKey, slug string) (Repository, error)
+		AddUser(projectKey, repositorySlug, user, access string) error
 		DeclinePullRequest(projectKey, repositorySlug string, pullRequestID, pullRequestVersion int) error
 		DeleteBranch(projectKey, repositorySlug, branchName string) error
 		DeleteBranchRestriction(projectKey, repositorySlug string, id int) error
@@ -283,10 +284,7 @@ func (client Client) CreateRepository(projectKey, projectSlug string) (Repositor
 	req.SetBasicAuth(client.userName, client.password)
 
 	responseCode, data, err := client.consumeResponse(req)
-	if err != nil {
-		return Repository{}, err
-	}
-	if responseCode != http.StatusCreated {
+	if responseCode != http.StatusCreated && responseCode >= http.StatusBadRequest {
 		reason := "unknown reason"
 		switch {
 		case responseCode == http.StatusBadRequest:
@@ -300,6 +298,9 @@ func (client Client) CreateRepository(projectKey, projectSlug string) (Repositor
 		}
 		return Repository{}, errorResponse{StatusCode: responseCode, Reason: reason}
 	}
+	if err != nil {
+		return Repository{}, err
+	}
 
 	var t Repository
 	err = json.Unmarshal(data, &t)
@@ -308,6 +309,33 @@ func (client Client) CreateRepository(projectKey, projectSlug string) (Repositor
 	}
 
 	return t, nil
+}
+
+func (client Client) AddUser(projectKey, repositorySlug, user, access string) error {
+	req, err := http.NewRequest("PUT", fmt.Sprintf("%s/rest/api/1.0/projects/%s/repos/%s/permissions/users?name=%s&permission=%s", client.baseURL.String(), projectKey, repositorySlug, user, access), nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	// use credentials if we have them.  If not, the repository must be public.
+	if client.userName != "" && client.password != "" {
+		req.SetBasicAuth(client.userName, client.password)
+	}
+
+	var responseCode int
+	responseCode, _, err = client.consumeResponse(req)
+	if err != nil {
+		return err
+	}
+	if responseCode != http.StatusNoContent {
+		reason := "unhandled reason"
+		switch {
+		case responseCode == http.StatusBadRequest:
+			reason = "Bad request."
+		}
+		return errorResponse{StatusCode: responseCode, Reason: reason}
+	}
+	return nil
 }
 
 // GetRepositories returns a map of repositories indexed by repository URL.
