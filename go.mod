@@ -1,4 +1,4 @@
-module github.com/missedone/stash
+module github.com/rewards-devops/stash
 
 go 1.14
 
